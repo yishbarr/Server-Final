@@ -5,6 +5,8 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.server.shop.models.Product;
+import com.server.shop.models.User;
 
 import java.io.*;
 import java.util.HashMap;
@@ -44,9 +46,33 @@ public class FirebaseHandler implements IHandler {
                 String email = objectInputStream.readObject().toString();
                 String shop = objectInputStream.readObject().toString();
                 String uid = objectInputStream.readObject().toString();
-                User user = new User(email, shop);
+                User user = new User(email, shop, uid);
                 DatabaseReference ref = database.getReference("users");
                 ref.child(uid).setValueAsync(user);
+                break;
+            }
+            case "addProduct": {
+                String name = objectInputStream.readObject().toString();
+                String id = objectInputStream.readObject().toString();
+                int quantity = objectInputStream.readInt();
+                int shelf = objectInputStream.readInt();
+                String uid = objectInputStream.readObject().toString();
+                Product product = new Product(name, id, quantity, shelf);
+                new Thread(() -> database.getReference("users").child(uid).child("products").child(product.id).setValue(product, (error, ref) -> {
+                    try {
+                        if (error != null)
+                            objectOutputStream.writeBoolean(false);
+                        else objectOutputStream.writeBoolean(true);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                })).start();
+                try {
+                    Thread.sleep(10000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                break;
             }
         }
     }
