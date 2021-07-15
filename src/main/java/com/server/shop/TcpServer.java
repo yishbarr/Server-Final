@@ -12,8 +12,6 @@ public class TcpServer {
     private final int port;
     //Whether to stop the server
     private boolean stopServer;
-    //ThreadPool for assigning a limited amount of threads
-    private ThreadPoolExecutor threadPool;
 
     public TcpServer(int port) {
         this.port = port;
@@ -22,7 +20,8 @@ public class TcpServer {
     //Use the function for each handler request. Every handler does something else.
     public void handleClient(IHandler requestHandler) {
         //Threadpool assignment
-        threadPool = new ThreadPoolExecutor(3, 5, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+        //ThreadPool for assigning a limited amount of threads
+        ThreadPoolExecutor threadPool = new ThreadPoolExecutor(3, 5, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
         try {
             //Open socket on port
             ServerSocket serverSocket = new ServerSocket(port);
@@ -48,7 +47,7 @@ public class TcpServer {
         }
     }
 
-    public void stop() {
+    /*public void stop() {
         if (!stopServer) {
             try {
                 //Let other threads close
@@ -59,6 +58,6 @@ public class TcpServer {
             stopServer = true;
             threadPool.shutdown();
         }
-    }
+    }*/
 
 }
