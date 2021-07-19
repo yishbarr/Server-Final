@@ -4,10 +4,15 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.database.*;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.server.shop.models.Product;
 import com.server.shop.models.User;
 
 import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,6 +21,7 @@ public class FirebaseHandler implements IHandler {
     private final String DATABASE_ERROR_MESSAGE = "Error reading database";
     private final int SUCCESS = 0;
     private final int DATABASE_FAILURE = 1;
+    private final int ID_EXISTS = 2;
     private final FirebaseDatabase database;
 
     public FirebaseHandler() {
@@ -51,95 +57,70 @@ public class FirebaseHandler implements IHandler {
                 ref.child(uid).setValueAsync(user);
             }
             case "addProduct" -> {
-                //Response codes for client.
-                final int ID_EXISTS = 2;
-
-                String name = objectInputStream.readObject().toString();
-                String id = objectInputStream.readObject().toString();
-                int quantity = objectInputStream.readInt();
-                int shelf = objectInputStream.readInt();
+                JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
                 String uid = objectInputStream.readObject().toString();
+                StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
+                String id = productObject.get("id").getAsString();
+                JsonObject checkObj = JsonParser.parseString(responseBuilder.toString()).getAsJsonObject();
+                JsonElement check = checkObj.get(id);
+                objectOutputStream.writeInt(check != null ? ID_EXISTS : SUCCESS);
+                String name = productObject.get("name").getAsString();
+                int quantity = productObject.get("quantity").getAsInt();
+                int shelf = productObject.get("shelf").getAsInt();
                 Product product = new Product(name, id, quantity, shelf);
-                new Thread(() -> {
-                    DatabaseReference reference = database.getReference("users").child(uid).child("products");
-                    reference.orderByKey().addListenerForSingleValueEvent(new ValueEventListener() {
-                        @Override
-                        public void onDataChange(DataSnapshot snapshot) {
-                            boolean idExists = false;
-                            for (DataSnapshot c : snapshot.getChildren()) {
-                                if (c.getKey().contentEquals(id + "")) {
-                                    System.out.println("ID already exists");
-                                    idExists = true;
-                                    break;
-                                }
-                            }
-                            if (!idExists)
-                                reference.child(id).setValue(product, (error, ref) -> {
-                                    try {
-                                        if (error != null)
-                                            objectOutputStream.writeInt(SUCCESS);
-                                        else objectOutputStream.writeInt(DATABASE_FAILURE);
-                                    } catch (IOException e) {
-                                        e.printStackTrace();
-                                    }
-                                });
-                            else {
-                                try {
-                                    objectOutputStream.writeInt(ID_EXISTS);
-                                } catch (IOException e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                        }
-
-                        @Override
-                        public void onCancelled(DatabaseError error) {
-                            System.out.println(DATABASE_ERROR_MESSAGE);
-                            try {
-                                objectOutputStream.writeInt(DATABASE_FAILURE);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    });
-                }).start();
-                try {
-                    Thread.sleep(10000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            case "getProducts" -> {
-                String uid = objectInputStream.readObject().toString();
-                database.getReference("users").child(uid).child("products").addListenerForSingleValueEvent(new ValueEventListener() {
+                DatabaseReference reference = database.getReference("users").child(uid).child("products");
+                reference.orderByKey().addListenerForSingleValueEvent(new ValueEventListener() {
                     @Override
                     public void onDataChange(DataSnapshot snapshot) {
-                        Map<String, Map<String, String>> products = new HashMap<>();
-                        snapshot.getChildren().forEach(c -> {
-                            Map<String, String> productDetails = new HashMap<>();
-                            c.getChildren().forEach(d -> productDetails.put(d.getKey(), d.getValue().toString()));
-                            products.put(c.getKey(), productDetails);
-                        });
-                        try {
-                            objectOutputStream.writeObject(products);
-                            objectOutputStream.writeInt(SUCCESS);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+                        reference.child(id).setValueAsync(product);
                     }
 
                     @Override
                     public void onCancelled(DatabaseError error) {
                         System.out.println(DATABASE_ERROR_MESSAGE);
-                        try {
-                            objectOutputStream.writeInt(DATABASE_FAILURE);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
                     }
                 });
-
+            }
+            case "getProducts" -> {
+                String uid = objectInputStream.readObject().toString();
+                StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
+                //If no products.
+                if (responseBuilder.length() == 0)
+                    objectOutputStream.write(null);
+                String productsString = responseBuilder.toString();
+                JsonObject productsJSON = JsonParser.parseString(productsString).getAsJsonObject();
+                Map<String, Map<String, String>> productsMap = new HashMap<>();
+                productsJSON.keySet().forEach(key -> {
+                    Map<String, String> productDetails = new HashMap<>();
+                    JsonObject productDetailsObj = productsJSON.getAsJsonObject(key);
+                    productDetailsObj.keySet().forEach(pKey -> productDetails.put(pKey, productDetailsObj.get(pKey).getAsString()));
+                    productsMap.put(key, productDetails);
+                });
+                objectOutputStream.writeObject(productsMap);
             }
         }
+    }
+
+    @org.jetbrains.annotations.NotNull
+    private StringBuilder getFromFireBaseHttp(String urlString) throws IOException {
+        HttpURLConnection connection;
+        BufferedReader JsonDataLines;
+        URL url = new URL(urlString);
+        connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+        connection.connect();
+        InputStream dataAsBytes = connection.getInputStream();
+        InputStreamReader dataAsChars = new InputStreamReader(dataAsBytes);
+        JsonDataLines = new BufferedReader(dataAsChars);
+        StringBuilder responseBuilder = new StringBuilder();
+
+        String oneLine;
+        while ((oneLine = JsonDataLines.readLine()) != null) {
+            responseBuilder.append(oneLine);
+            responseBuilder.append("\n");
+        }
+        connection.disconnect();
+        JsonDataLines.close();
+        return responseBuilder;
     }
 }
