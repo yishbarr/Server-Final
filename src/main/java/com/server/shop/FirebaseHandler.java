@@ -98,6 +98,11 @@ public class FirebaseHandler implements IHandler {
                 });
                 objectOutputStream.writeObject(productsMap);
             }
+            case "deleteProduct" -> {
+                String id = objectInputStream.readObject().toString();
+                String uid = objectInputStream.readObject().toString();
+                database.getReference("users").child(uid).child("products").child(id).removeValueAsync();
+            }
         }
     }
 
