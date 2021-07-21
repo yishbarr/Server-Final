@@ -3,8 +3,8 @@ package com.server.shop;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
-import com.google.firebase.database.*;
-import com.google.gson.JsonElement;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.server.shop.models.Product;
@@ -18,7 +18,9 @@ import java.util.Map;
 
 public class FirebaseHandler implements IHandler {
     private final String UID = "shop-server";
-    private final String DATABASE_ERROR_MESSAGE = "Error reading database";
+    private final String DATABASE_ERROR_MESSAGE = "Error reading database.";
+    private final String DATABASE_BLANK_MESSAGE = "No existing products.";
+    private final String DATABASE_URL = "https://shop-manager-e603d-default-rtdb.firebaseio.com";
     private final int SUCCESS = 0;
     private final int DATABASE_FAILURE = 1;
     private final int ID_EXISTS = 2;
@@ -32,7 +34,7 @@ public class FirebaseHandler implements IHandler {
             FileInputStream serviceAccount = new FileInputStream("src/main/resources/shop-manager-e603d-firebase-adminsdk-x699q-54761739e9.json");
             FirebaseOptions options = new FirebaseOptions.Builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                    .setDatabaseUrl("https://shop-manager-e603d-default-rtdb.firebaseio.com")
+                    .setDatabaseUrl(DATABASE_URL)
                     .setDatabaseAuthVariableOverride(auth)
                     .build();
             FirebaseApp.initializeApp(options);
@@ -48,6 +50,7 @@ public class FirebaseHandler implements IHandler {
         ObjectOutputStream objectOutputStream = new ObjectOutputStream(res);
 
         switch (objectInputStream.readObject().toString()) {
+            //Add account to database.
             case "addAccount" -> {
                 String email = objectInputStream.readObject().toString();
                 String shop = objectInputStream.readObject().toString();
@@ -56,56 +59,80 @@ public class FirebaseHandler implements IHandler {
                 DatabaseReference ref = database.getReference("users");
                 ref.child(uid).setValueAsync(user);
             }
+            //Add product
             case "addProduct" -> {
                 JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
                 String uid = objectInputStream.readObject().toString();
+
                 StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
+                JsonObject checkObj = null;
+                try {
+                    checkObj = JsonParser.parseString(responseBuilder.toString()).getAsJsonObject();
+                } catch (IllegalStateException e) {
+                    System.out.println(DATABASE_BLANK_MESSAGE);
+                }
                 String id = productObject.get("id").getAsString();
-                JsonObject checkObj = JsonParser.parseString(responseBuilder.toString()).getAsJsonObject();
-                JsonElement check = checkObj.get(id);
-                objectOutputStream.writeInt(check != null ? ID_EXISTS : SUCCESS);
+                if (checkObj != null) {
+                    for (String key : checkObj.keySet()) {
+                        if (key.contentEquals(id)) {
+                            objectOutputStream.writeInt(ID_EXISTS);
+                            return;
+                        }
+                    }
+                }
+                objectOutputStream.writeInt(SUCCESS);
                 String name = productObject.get("name").getAsString();
                 int quantity = productObject.get("quantity").getAsInt();
                 int shelf = productObject.get("shelf").getAsInt();
                 Product product = new Product(name, id, quantity, shelf);
-                DatabaseReference reference = database.getReference("users").child(uid).child("products");
-                reference.orderByKey().addListenerForSingleValueEvent(new ValueEventListener() {
-                    @Override
-                    public void onDataChange(DataSnapshot snapshot) {
-                        reference.child(id).setValueAsync(product);
-                    }
-
-                    @Override
-                    public void onCancelled(DatabaseError error) {
-                        System.out.println(DATABASE_ERROR_MESSAGE);
-                    }
-                });
+                database.getReference("users").child(uid).child("products").child(id).setValueAsync(product);
             }
+            //Get products and send to client.
             case "getProducts" -> {
                 String uid = objectInputStream.readObject().toString();
                 StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
                 //If no products.
-                if (responseBuilder.length() == 0)
-                    objectOutputStream.write(null);
                 String productsString = responseBuilder.toString();
-                JsonObject productsJSON = JsonParser.parseString(productsString).getAsJsonObject();
+                JsonObject productsJSON = null;
+                try {
+                    productsJSON = JsonParser.parseString(productsString).getAsJsonObject();
+                } catch (IllegalStateException e) {
+                    System.out.println(DATABASE_BLANK_MESSAGE);
+                }
+                if (productsJSON == null) {
+                    objectOutputStream.write(null);
+                    return;
+                }
                 Map<String, Map<String, String>> productsMap = new HashMap<>();
+                JsonObject finalProductsJSON = productsJSON;
                 productsJSON.keySet().forEach(key -> {
                     Map<String, String> productDetails = new HashMap<>();
-                    JsonObject productDetailsObj = productsJSON.getAsJsonObject(key);
+                    JsonObject productDetailsObj = finalProductsJSON.getAsJsonObject(key);
                     productDetailsObj.keySet().forEach(pKey -> productDetails.put(pKey, productDetailsObj.get(pKey).getAsString()));
                     productsMap.put(key, productDetails);
                 });
                 objectOutputStream.writeObject(productsMap);
             }
+            //Delete product by product id.
             case "deleteProduct" -> {
                 String id = objectInputStream.readObject().toString();
                 String uid = objectInputStream.readObject().toString();
                 database.getReference("users").child(uid).child("products").child(id).removeValueAsync();
             }
+            //update product by product id.
+            case "updateProduct" -> {
+                JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
+                String uid = objectInputStream.readObject().toString();
+                String id = productObject.get("id").getAsString();
+                String name = productObject.get("name").getAsString();
+                int quantity = productObject.get("quantity").getAsInt();
+                int shelf = productObject.get("shelf").getAsInt();
+                database.getReference("users").child(uid).child("products").child(id).setValueAsync(new Product(name, id, shelf, quantity));
+            }
         }
     }
 
+    //Get firebase data with classic HTTP request instead of the firebase functions.
     @org.jetbrains.annotations.NotNull
     private StringBuilder getFromFireBaseHttp(String urlString) throws IOException {
         HttpURLConnection connection;
