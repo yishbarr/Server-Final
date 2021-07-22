@@ -100,7 +100,7 @@ public class FirebaseHandler implements IHandler {
                     System.out.println(DATABASE_BLANK_MESSAGE);
                 }
                 if (productsJSON == null) {
-                    objectOutputStream.write(null);
+                    objectOutputStream.writeObject(null);
                     return;
                 }
                 Map<String, Map<String, String>> productsMap = new HashMap<>();
