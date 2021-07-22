@@ -31,7 +31,7 @@ public class FirebaseHandler implements IHandler {
         auth.put("uid", UID);
 
         try {
-            FileInputStream serviceAccount = new FileInputStream("src/main/resources/shop-manager-e603d-firebase-adminsdk-x699q-54761739e9.json");
+            FileInputStream serviceAccount = new FileInputStream("src/main/resources/shop-manager-e603d-firebase-adminsdk-ifukw-49aa40034b.json");
             FirebaseOptions options = new FirebaseOptions.Builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
                     .setDatabaseUrl(DATABASE_URL)
