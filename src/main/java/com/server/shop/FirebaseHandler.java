@@ -64,7 +64,7 @@ public class FirebaseHandler implements IHandler {
                 JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
                 String uid = objectInputStream.readObject().toString();
 
-                StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
+                /*StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
                 JsonObject checkObj = null;
                 try {
                     checkObj = JsonParser.parseString(responseBuilder.toString()).getAsJsonObject();
@@ -80,7 +80,8 @@ public class FirebaseHandler implements IHandler {
                         }
                     }
                 }
-                objectOutputStream.writeInt(SUCCESS);
+                objectOutputStream.writeInt(SUCCESS);*/
+                String id = productObject.get("id").getAsString();
                 String name = productObject.get("name").getAsString();
                 int quantity = productObject.get("quantity").getAsInt();
                 int shelf = productObject.get("shelf").getAsInt();
