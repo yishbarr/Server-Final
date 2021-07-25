@@ -13,17 +13,15 @@ import com.server.shop.models.User;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class FirebaseHandler implements IHandler {
+    private static final String DATABASE_BLANK_MESSAGE = "No existing products.";
     private final String UID = "shop-server";
-    private final String DATABASE_ERROR_MESSAGE = "Error reading database.";
-    private final String DATABASE_BLANK_MESSAGE = "No existing products.";
     private final String DATABASE_URL = "https://shop-manager-e603d-default-rtdb.firebaseio.com";
-    private final int SUCCESS = 0;
-    private final int DATABASE_FAILURE = 1;
-    private final int ID_EXISTS = 2;
     private final FirebaseDatabase database;
 
     public FirebaseHandler() {
@@ -48,7 +46,7 @@ public class FirebaseHandler implements IHandler {
     public void handle(InputStream req, OutputStream res) throws IOException, ClassNotFoundException {
         ObjectInputStream objectInputStream = new ObjectInputStream(req);
         ObjectOutputStream objectOutputStream = new ObjectOutputStream(res);
-
+        //Client request type
         switch (objectInputStream.readObject().toString()) {
             //Add account to database.
             case "addAccount" -> {
@@ -64,23 +62,6 @@ public class FirebaseHandler implements IHandler {
                 JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
                 String uid = objectInputStream.readObject().toString();
 
-                /*StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
-                JsonObject checkObj = null;
-                try {
-                    checkObj = JsonParser.parseString(responseBuilder.toString()).getAsJsonObject();
-                } catch (IllegalStateException e) {
-                    System.out.println(DATABASE_BLANK_MESSAGE);
-                }
-                String id = productObject.get("id").getAsString();
-                if (checkObj != null) {
-                    for (String key : checkObj.keySet()) {
-                        if (key.contentEquals(id)) {
-                            objectOutputStream.writeInt(ID_EXISTS);
-                            return;
-                        }
-                    }
-                }
-                objectOutputStream.writeInt(SUCCESS);*/
                 String id = productObject.get("id").getAsString();
                 String name = productObject.get("name").getAsString();
                 int quantity = productObject.get("quantity").getAsInt();
@@ -88,6 +69,7 @@ public class FirebaseHandler implements IHandler {
                 Product product = new Product(name, id, quantity, shelf);
                 database.getReference("users").child(uid).child("products").child(id).setValueAsync(product);
             }
+
             //Get products and send to client.
             case "getProducts" -> {
                 String uid = objectInputStream.readObject().toString();
@@ -129,6 +111,20 @@ public class FirebaseHandler implements IHandler {
                 int quantity = productObject.get("quantity").getAsInt();
                 int shelf = productObject.get("shelf").getAsInt();
                 database.getReference("users").child(uid).child("products").child(id).setValueAsync(new Product(name, id, shelf, quantity));
+            }
+            case "getIds" -> {
+                String uid = objectInputStream.readObject().toString();
+                StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
+                JsonObject checkObj = null;
+                try {
+                    checkObj = JsonParser.parseString(responseBuilder.toString()).getAsJsonObject();
+                } catch (IllegalStateException e) {
+                    System.out.println(DATABASE_BLANK_MESSAGE);
+                }
+                ArrayList<String> keys = new ArrayList<>();
+                if (checkObj != null)
+                    keys = new ArrayList<>(Objects.requireNonNull(checkObj).keySet());
+                objectOutputStream.writeObject(keys);
             }
         }
     }

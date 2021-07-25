@@ -10,11 +10,12 @@ import java.util.concurrent.TimeUnit;
 public class TcpServer {
     //Port number
     private final int port;
-    //Whether to stop the server
     private boolean stopServer;
 
+    //Whether to stop the server
     public TcpServer(int port) {
         this.port = port;
+        stopServer = false;
     }
 
     //Use the function for each handler request. Every handler does something else.
@@ -35,29 +36,15 @@ public class TcpServer {
                     try {
                         requestHandler.handle(clientConnection.getInputStream(), clientConnection.getOutputStream());
                         clientConnection.close();
-                    } catch (IOException | ClassNotFoundException e) {
+                    } catch (IOException | ClassNotFoundException | InterruptedException e) {
                         e.printStackTrace();
                     }
                 };
                 threadPool.execute(clientHandle);
             }
-            serverSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-
-    /*public void stop() {
-        if (!stopServer) {
-            try {
-                //Let other threads close
-                Thread.sleep(20000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            stopServer = true;
-            threadPool.shutdown();
-        }
-    }*/
 
 }
