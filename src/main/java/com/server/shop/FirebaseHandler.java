@@ -57,7 +57,7 @@ public class FirebaseHandler implements IHandler {
                 DatabaseReference ref = database.getReference("users");
                 ref.child(uid).setValueAsync(user);
             }
-            //Add product
+            //Add or update product
             case "addProduct" -> {
                 JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
                 String uid = objectInputStream.readObject().toString();
@@ -86,6 +86,7 @@ public class FirebaseHandler implements IHandler {
                     objectOutputStream.writeObject(null);
                     return;
                 }
+                //Create serializable map for products.
                 Map<String, Map<String, String>> productsMap = new HashMap<>();
                 JsonObject finalProductsJSON = productsJSON;
                 productsJSON.keySet().forEach(key -> {
@@ -102,16 +103,7 @@ public class FirebaseHandler implements IHandler {
                 String uid = objectInputStream.readObject().toString();
                 database.getReference("users").child(uid).child("products").child(id).removeValueAsync();
             }
-            //update product by product id.
-            case "updateProduct" -> {
-                JsonObject productObject = JsonParser.parseString(objectInputStream.readObject().toString()).getAsJsonObject();
-                String uid = objectInputStream.readObject().toString();
-                String id = productObject.get("id").getAsString();
-                String name = productObject.get("name").getAsString();
-                int quantity = productObject.get("quantity").getAsInt();
-                int shelf = productObject.get("shelf").getAsInt();
-                database.getReference("users").child(uid).child("products").child(id).setValueAsync(new Product(name, id, shelf, quantity));
-            }
+            //Get ids to send to client for validating a new id.
             case "getIds" -> {
                 String uid = objectInputStream.readObject().toString();
                 StringBuilder responseBuilder = getFromFireBaseHttp("https://shop-manager-e603d-default-rtdb.firebaseio.com/users/" + uid + "/products.json");
