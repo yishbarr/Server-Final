@@ -35,9 +35,15 @@ public class TcpServer {
                     System.out.println("New client request");
                     try {
                         requestHandler.handle(clientConnection.getInputStream(), clientConnection.getOutputStream());
-                        clientConnection.close();
                     } catch (IOException | ClassNotFoundException | InterruptedException e) {
                         e.printStackTrace();
+                    }
+                    finally {
+                        try {
+                            clientConnection.close();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
                 };
                 threadPool.execute(clientHandle);
